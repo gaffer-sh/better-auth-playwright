@@ -74,10 +74,7 @@ export function testPlugin(options: TestPluginOptions = {}) {
           // 3. Create session directly (bypasses auth flow)
           const session = await adapter.createSession(user.id)
 
-          // 3b. Set signed session cookie on the response
-          await setSessionCookie(ctx, { session, user })
-
-          // 4. Run test data plugins
+          // 4. Run test data plugins (may update session, e.g. activeOrganizationId)
           const pluginResults: Record<string, unknown> = {}
           for (const plugin of testPlugins) {
             const pluginOpts = ctx.body.pluginData?.[plugin.id] ?? {}
@@ -93,7 +90,20 @@ export function testPlugin(options: TestPluginOptions = {}) {
             )
           }
 
-          // 5. Return everything the Playwright side needs
+          // 5. Re-fetch session after plugins (plugins may have updated it,
+          //    e.g. organizationTest sets activeOrganizationId).
+          //    This ensures the cookie contains the final session state,
+          //    which matters when cookie caching is enabled.
+          const finalSession = await adapter.findSession(session.token)
+
+          // 6. Set signed session cookie AFTER plugins so cached cookie
+          //    includes all plugin-added fields (e.g. activeOrganizationId)
+          await setSessionCookie(ctx, {
+            session: finalSession?.session ?? session,
+            user,
+          })
+
+          // 7. Return everything the Playwright side needs
           return ctx.json({
             user: { id: user.id, email: user.email, name: user.name },
             session: { id: session.id, token: session.token },
