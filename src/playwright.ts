@@ -1,0 +1,163 @@
+import { test as base } from '@playwright/test'
+
+interface CreateUserOptions {
+  email?: string
+  name?: string
+  /**
+   * Set a password for this user.
+   * Only needed if the test exercises the login form.
+   * Omit for faster tests that skip login entirely.
+   */
+  password?: string
+  /** Plugin-specific options, keyed by plugin ID */
+  pluginData?: Record<string, unknown>
+}
+
+interface TestUser {
+  id: string
+  email: string
+  name: string
+  session: { id: string; token: string }
+  /** Plugin-specific data, keyed by plugin ID */
+  plugins: Record<string, unknown>
+}
+
+interface TestAuth {
+  /**
+   * Create a test user and set session cookies on the current browser context.
+   *
+   * The user is created via internalAdapter (no password hashing unless
+   * `password` is specified). A session is created directly in the DB
+   * and the session cookie is set on the browser context.
+   */
+  createUser(options?: CreateUserOptions): Promise<TestUser>
+
+  /**
+   * Delete a test user by email. Called automatically in teardown
+   * for all users created during the test.
+   */
+  cleanup(email: string): Promise<void>
+}
+
+interface TestAuthFixtures {
+  auth: TestAuth
+}
+
+export type { CreateUserOptions, TestUser, TestAuth, TestAuthFixtures }
+
+/**
+ * Create Playwright fixtures configured for your Better Auth app.
+ *
+ * @example
+ * ```ts
+ * // e2e/fixtures.ts
+ * import { createTestFixtures } from 'better-auth-playwright'
+ *
+ * export const test = createTestFixtures({
+ *   secret: process.env.TEST_DATA_SECRET!,
+ * })
+ *
+ * export { expect } from '@playwright/test'
+ * ```
+ */
+export function createTestFixtures(config: {
+  /** Secret that matches the server plugin's secret */
+  secret: string
+  /**
+   * Session cookie name.
+   * Defaults to 'better-auth.session_token'.
+   */
+  cookieName?: string
+  /**
+   * Base path for Better Auth endpoints.
+   * Defaults to '/api/auth'.
+   */
+  basePath?: string
+}) {
+  const cookieName = config.cookieName ?? 'better-auth.session_token'
+  const basePath = config.basePath ?? '/api/auth'
+
+  return base.extend<TestAuthFixtures>({
+    auth: async ({ page, baseURL }, use) => {
+      if (!baseURL) {
+        throw new Error('baseURL must be configured in Playwright')
+      }
+
+      const created: string[] = []
+      const context = page.context()
+
+      const auth: TestAuth = {
+        async createUser(options = {}) {
+          const email =
+            options.email ??
+            `test-${crypto.randomUUID().slice(0, 8)}@test.local`
+
+          const res = await fetch(`${baseURL}${basePath}/test-data/user`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Test-Secret': config.secret,
+            },
+            body: JSON.stringify({
+              email,
+              name: options.name,
+              password: options.password,
+              pluginData: options.pluginData,
+            }),
+          })
+
+          if (!res.ok) {
+            const error = await res.text()
+            throw new Error(
+              `better-auth-playwright: createUser failed (${res.status}): ${error}`,
+            )
+          }
+
+          const data = (await res.json()) as {
+            user: { id: string; email: string; name: string }
+            session: { id: string; token: string }
+            plugins: Record<string, unknown>
+          }
+          created.push(email)
+
+          // Set session cookie on browser context
+          const domain = new URL(baseURL).hostname
+          await context.addCookies([
+            {
+              name: cookieName,
+              value: data.session.token,
+              domain,
+              path: '/',
+            },
+          ])
+
+          return {
+            id: data.user.id,
+            email: data.user.email,
+            name: data.user.name,
+            session: data.session,
+            plugins: data.plugins,
+          }
+        },
+
+        async cleanup(email: string) {
+          await fetch(`${baseURL}${basePath}/test-data/user`, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Test-Secret': config.secret,
+            },
+            body: JSON.stringify({ email }),
+          }).catch(() => {})
+        },
+      }
+
+      await use(auth)
+
+      // Auto-cleanup all created users after test
+      for (const email of created) {
+        await auth.cleanup(email)
+      }
+    },
+  })
+}
