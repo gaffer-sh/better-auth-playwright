@@ -1,4 +1,4 @@
-import { test as base } from '@playwright/test'
+import { test as defaultBase, type TestType } from '@playwright/test'
 
 interface CreateUserOptions {
   email?: string
@@ -73,11 +73,19 @@ export function createTestFixtures(config: {
    * Defaults to '/api/auth'.
    */
   basePath?: string
+  /**
+   * Custom Playwright base test to extend.
+   * Pass your framework's test (e.g. Nuxt's `test` from `@nuxt/test-utils/playwright`)
+   * to preserve its fixtures while adding `auth`.
+   * Defaults to `@playwright/test`'s `test`.
+   */
+  test?: TestType<any, any>
 }) {
   const cookieName = config.cookieName ?? 'better-auth.session_token'
   const basePath = config.basePath ?? '/api/auth'
+  const baseTest = config.test ?? defaultBase
 
-  return base.extend<TestAuthFixtures>({
+  return baseTest.extend<TestAuthFixtures>({
     auth: async ({ page, baseURL }, use) => {
       if (!baseURL) {
         throw new Error('baseURL must be configured in Playwright')

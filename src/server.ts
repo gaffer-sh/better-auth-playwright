@@ -11,7 +11,7 @@ interface TestPluginOptions {
    * Test data plugins that extend user creation with
    * plugin-specific resources (orgs, API keys, etc.)
    */
-  plugins?: TestDataPlugin[]
+  plugins?: TestDataPlugin<any, any, any>[]
 
   /**
    * Secret required in X-Test-Secret header.
