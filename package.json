@@ -1,7 +1,7 @@
 {
   "name": "better-auth-playwright",
   "type": "module",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "E2E testing plugin for Better Auth — fast user creation and automatic session cookies for Playwright",
   "license": "MIT",
   "author": "Gaffer <hello@gaffer.sh>",
