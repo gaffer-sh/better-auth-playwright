@@ -1,4 +1,5 @@
 import type { BetterAuthPlugin } from 'better-auth'
+import { setSessionCookie } from 'better-auth/cookies'
 import { createAuthEndpoint } from 'better-auth/plugins'
 import { z } from 'zod'
 import type { TestDataPlugin, CreateUserContext } from './types.js'
@@ -72,6 +73,9 @@ export function testPlugin(options: TestPluginOptions = {}) {
 
           // 3. Create session directly (bypasses auth flow)
           const session = await adapter.createSession(user.id)
+
+          // 3b. Set signed session cookie on the response
+          await setSessionCookie(ctx, { session, user })
 
           // 4. Run test data plugins
           const pluginResults: Record<string, unknown> = {}

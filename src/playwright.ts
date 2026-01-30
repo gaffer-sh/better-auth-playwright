@@ -129,16 +129,26 @@ export function createTestFixtures(config: {
           }
           created.push(email)
 
-          // Set session cookie on browser context
+          // Extract Set-Cookie headers from the response and set them on the browser context
           const domain = new URL(baseURL).hostname
-          await context.addCookies([
-            {
-              name: cookieName,
-              value: data.session.token,
+          const setCookieHeaders = res.headers.getSetCookie()
+          const cookies = setCookieHeaders.map((header) => {
+            const [nameValue, ...attrs] = header.split(';')
+            const [name, ...valueParts] = nameValue!.split('=')
+            const value = valueParts.join('=')
+            return {
+              name: name!.trim(),
+              value,
               domain,
               path: '/',
-            },
-          ])
+              // Preserve httpOnly/secure from original cookie attributes
+              httpOnly: attrs.some(a => a.trim().toLowerCase() === 'httponly'),
+              secure: attrs.some(a => a.trim().toLowerCase() === 'secure'),
+            }
+          }).filter(c => c.name && c.value)
+          if (cookies.length > 0) {
+            await context.addCookies(cookies)
+          }
 
           return {
             id: data.user.id,
