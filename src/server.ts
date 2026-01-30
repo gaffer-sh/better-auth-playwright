@@ -39,7 +39,7 @@ export function testPlugin(options: TestPluginOptions = {}) {
             password: z.string().optional(),
             pluginData: z.record(z.string(), z.any()).optional(),
           }),
-          metadata: { SERVER_ONLY: true },
+          metadata: { isAction: false },
         },
         async (ctx) => {
           if (!secret) return ctx.json(null, { status: 404 })
@@ -105,7 +105,7 @@ export function testPlugin(options: TestPluginOptions = {}) {
           body: z.object({
             email: z.string().email(),
           }),
-          metadata: { SERVER_ONLY: true },
+          metadata: { isAction: false },
         },
         async (ctx) => {
           if (!secret) return ctx.json(null, { status: 404 })
@@ -136,7 +136,7 @@ export function testPlugin(options: TestPluginOptions = {}) {
         '/test-data/capabilities',
         {
           method: 'GET',
-          metadata: { SERVER_ONLY: true },
+          metadata: { isAction: false },
         },
         async (ctx) => {
           if (!secret) return ctx.json(null, { status: 404 })
