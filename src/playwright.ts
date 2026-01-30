@@ -1,4 +1,4 @@
-import { test as defaultBase, type TestType } from '@playwright/test'
+import { test as defaultBase, type Page, type TestType } from '@playwright/test'
 
 interface CreateUserOptions {
   email?: string
@@ -86,7 +86,7 @@ export function createTestFixtures(config: {
   const baseTest = config.test ?? defaultBase
 
   return baseTest.extend<TestAuthFixtures>({
-    auth: async ({ page, baseURL }, use) => {
+    auth: async ({ page, baseURL }: { page: Page; baseURL: string | undefined }, use: (r: TestAuth) => Promise<void>) => {
       if (!baseURL) {
         throw new Error('baseURL must be configured in Playwright')
       }
