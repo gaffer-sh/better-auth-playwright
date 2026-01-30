@@ -91,6 +91,7 @@ export function createTestFixtures(config: {
         throw new Error('baseURL must be configured in Playwright')
       }
 
+      const origin = baseURL.replace(/\/+$/, '')
       const created: string[] = []
       const context = page.context()
 
@@ -100,7 +101,7 @@ export function createTestFixtures(config: {
             options.email ??
             `test-${crypto.randomUUID().slice(0, 8)}@test.local`
 
-          const res = await fetch(`${baseURL}${basePath}/test-data/user`, {
+          const res = await fetch(`${origin}${basePath}/test-data/user`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -149,7 +150,7 @@ export function createTestFixtures(config: {
         },
 
         async cleanup(email: string) {
-          await fetch(`${baseURL}${basePath}/test-data/user`, {
+          await fetch(`${origin}${basePath}/test-data/user`, {
             method: 'DELETE',
             headers: {
               'Content-Type': 'application/json',
