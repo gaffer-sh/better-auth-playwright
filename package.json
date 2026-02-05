@@ -2,14 +2,23 @@
   "name": "better-auth-playwright",
   "type": "module",
   "version": "0.1.4",
+  "packageManager": "pnpm@10.18.1",
   "description": "E2E testing plugin for Better Auth — fast user creation and automatic session cookies for Playwright",
-  "license": "MIT",
   "author": "Gaffer <hello@gaffer.sh>",
+  "license": "MIT",
+  "homepage": "https://gaffer.sh",
   "repository": {
     "type": "git",
     "url": "https://github.com/gaffer-sh/better-auth-playwright.git"
   },
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.js",
+    "./server": "./dist/server.js",
+    "./package.json": "./package.json"
+  },
   "main": "./dist/index.js",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
     "dist"
@@ -17,13 +26,15 @@
   "engines": {
     "node": ">=18"
   },
-  "packageManager": "pnpm@10.18.1",
-  "sideEffects": false,
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "prepare": "simple-git-hooks",
     "prepublishOnly": "pnpm build",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "release": "bumpp --tag 'v%s' --commit 'chore: release v%s' && git push --follow-tags"
   },
   "peerDependencies": {
@@ -39,18 +50,23 @@
     }
   },
   "devDependencies": {
+    "@antfu/eslint-config": "^7.2.0",
     "@playwright/test": "^1.57.0",
     "@types/node": "^22.0.0",
     "better-auth": "^1.4.18",
     "bumpp": "^10.1.0",
+    "eslint": "^9.39.2",
+    "lint-staged": "^16.2.7",
+    "simple-git-hooks": "^2.13.1",
     "tsdown": "^0.15.0",
     "typescript": "^5.9.3",
+    "vitest": "^4.0.18",
     "zod": "^3.24.0"
   },
-  "module": "./dist/index.js",
-  "exports": {
-    ".": "./dist/index.js",
-    "./server": "./dist/server.js",
-    "./package.json": "./package.json"
+  "simple-git-hooks": {
+    "pre-commit": "npx lint-staged"
+  },
+  "lint-staged": {
+    "*": "eslint --fix"
   }
 }

@@ -1,5 +1,5 @@
 import type { AuthContext, User } from 'better-auth'
-import type { TestDataPlugin, CreateUserContext } from '../types.js'
+import type { CreateUserContext, TestDataPlugin } from '../types.js'
 
 interface OrgTestOptions {
   /** Organization name. Defaults to "{user.name}'s Org" */
@@ -21,6 +21,7 @@ interface OrgTestResult {
 export function organizationTest(
   defaults?: Partial<OrgTestOptions>,
 ): TestDataPlugin<'organization', OrgTestOptions, OrgTestResult | null> {
+  // eslint-disable-next-line ts/explicit-function-return-type
   async function getAdapter(ctx: AuthContext) {
     const { getOrgAdapter } = await import('better-auth/plugins')
     return getOrgAdapter(ctx)
@@ -32,16 +33,17 @@ export function organizationTest(
     async onCreateUser(ctx: CreateUserContext, opts: OrgTestOptions) {
       const options = { ...defaults, ...opts }
 
-      if (options.skip) return null
+      if (options.skip)
+        return null
 
       const orgAdapter = await getAdapter(ctx.authContext)
 
       const name = options.name ?? `${ctx.user.name}'s Org`
-      const slug =
-        options.slug ??
-        ctx.user.email
-          .split('@')[0]
-          .replace(/[^a-z0-9-]/g, '-')
+      const slug
+        = options.slug
+          ?? ctx.user.email
+            .split('@')[0]
+            .replace(/[^a-z0-9-]/g, '-')
       const role = options.role ?? 'owner'
 
       const org = await orgAdapter.createOrganization({

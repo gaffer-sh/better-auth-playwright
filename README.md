@@ -60,7 +60,7 @@ Use the `auth` fixture to create users and get authenticated browser sessions:
 
 ```ts
 // e2e/dashboard.spec.ts
-import { test, expect } from './fixtures'
+import { expect, test } from './fixtures'
 
 test('user can see the dashboard', async ({ page, auth }) => {
   const user = await auth.createUser()
@@ -114,8 +114,8 @@ Returns `{ id, name, slug }` or `null` if skipped.
 ```ts
 // auth.ts (server)
 import { betterAuth } from 'better-auth'
+import { organizationTest, testPlugin } from 'better-auth-playwright/server'
 import { organization } from 'better-auth/plugins'
-import { testPlugin, organizationTest } from 'better-auth-playwright/server'
 
 export const auth = betterAuth({
   plugins: [
@@ -161,7 +161,7 @@ interface TestUser {
   id: string
   email: string
   name: string
-  session: { id: string; token: string }
+  session: { id: string, token: string }
   plugins: Record<string, unknown>
 }
 ```
@@ -175,7 +175,7 @@ Delete a test user by email. Called automatically after each test for all users 
 Create custom test data plugins to extend user creation for other Better Auth plugins:
 
 ```ts
-import type { TestDataPlugin, CreateUserContext } from 'better-auth-playwright'
+import type { CreateUserContext, TestDataPlugin } from 'better-auth-playwright'
 
 interface MyPluginOptions {
   someOption?: string
@@ -232,6 +232,10 @@ export const test = createTestFixtures({
 
 export { expect } from 'better-auth-playwright'
 ```
+
+## Credit
+
+Built by the team behind [Gaffer](https://gaffer.sh) — test reporting and analytics for CI/CD.
 
 ## License
 

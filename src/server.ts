@@ -1,11 +1,11 @@
 import type { BetterAuthPlugin } from 'better-auth'
+import type { CreateUserContext, TestDataPlugin } from './types.js'
 import { setSessionCookie } from 'better-auth/cookies'
 import { createAuthEndpoint } from 'better-auth/plugins'
 import { z } from 'zod'
-import type { TestDataPlugin, CreateUserContext } from './types.js'
 
-export type { TestDataPlugin, CreateUserContext } from './types.js'
-export { organizationTest } from './plugins/index.js'
+export { apiKeyTest, organizationTest } from './plugins/index.js'
+export type { CreateUserContext, TestDataPlugin } from './types.js'
 
 interface TestPluginOptions {
   /**
@@ -22,7 +22,8 @@ interface TestPluginOptions {
   secret?: string
 }
 
-export function testPlugin(options: TestPluginOptions = {}) {
+export function testPlugin(options: TestPluginOptions = {}): BetterAuthPlugin {
+  // eslint-disable-next-line node/prefer-global/process
   const secret = options.secret ?? process.env.TEST_DATA_SECRET
   const testPlugins = options.plugins ?? []
 
@@ -43,7 +44,8 @@ export function testPlugin(options: TestPluginOptions = {}) {
           metadata: { isAction: false },
         },
         async (ctx) => {
-          if (!secret) return ctx.json(null, { status: 404 })
+          if (!secret)
+            return ctx.json(null, { status: 404 })
           const headerSecret = ctx.headers?.get('x-test-secret')
           if (headerSecret !== secret) {
             return ctx.json({ error: 'Unauthorized' }, { status: 401 })
@@ -122,7 +124,8 @@ export function testPlugin(options: TestPluginOptions = {}) {
           metadata: { isAction: false },
         },
         async (ctx) => {
-          if (!secret) return ctx.json(null, { status: 404 })
+          if (!secret)
+            return ctx.json(null, { status: 404 })
           const headerSecret = ctx.headers?.get('x-test-secret')
           if (headerSecret !== secret) {
             return ctx.json({ error: 'Unauthorized' }, { status: 401 })
@@ -153,14 +156,15 @@ export function testPlugin(options: TestPluginOptions = {}) {
           metadata: { isAction: false },
         },
         async (ctx) => {
-          if (!secret) return ctx.json(null, { status: 404 })
+          if (!secret)
+            return ctx.json(null, { status: 404 })
 
           const installedBetterAuthPlugins = (
             ctx.context.options.plugins ?? []
-          ).map((p) => p.id)
+          ).map(p => p.id)
 
           return ctx.json({
-            plugins: testPlugins.map((p) => p.id),
+            plugins: testPlugins.map(p => p.id),
             detectedAuthPlugins: installedBetterAuthPlugins,
           })
         },

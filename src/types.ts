@@ -1,4 +1,4 @@
-import type { AuthContext, User, Session } from 'better-auth'
+import type { AuthContext, Session, User } from 'better-auth'
 
 export interface CreateUserContext {
   authContext: AuthContext
