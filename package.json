@@ -1,7 +1,7 @@
 {
   "name": "better-auth-playwright",
   "type": "module",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "packageManager": "pnpm@10.18.1",
   "description": "E2E testing plugin for Better Auth — fast user creation and automatic session cookies for Playwright",
   "author": "Gaffer <hello@gaffer.sh>",
