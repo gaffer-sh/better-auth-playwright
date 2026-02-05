@@ -1,11 +1,11 @@
 export {
   createTestFixtures,
   type CreateUserOptions,
-  type TestUser,
   type TestAuth,
   type TestAuthFixtures,
+  type TestUser,
 } from './playwright.js'
 
-export type { TestDataPlugin, CreateUserContext } from './types.js'
+export type { CreateUserContext, TestDataPlugin } from './types.js'
 
 export { expect } from '@playwright/test'

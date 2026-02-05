@@ -7,6 +7,7 @@ export default defineConfig({
   exports: true,
   external: [
     'better-auth',
+    'better-auth/cookies',
     'better-auth/plugins',
     '@playwright/test',
     'zod',

@@ -4,7 +4,7 @@ Test data management for [Better Auth](https://www.better-auth.com/) and [Playwr
 
 ## Features
 
-- **Direct DB user creation** — bypasses sign-up flow and password hashing for fast tests
+- **Direct DB user creation** — bypasses sign-up flow for fast tests (password hashing only when needed)
 - **Auto session cookies** — sets session cookies on the Playwright browser context automatically
 - **Automatic cleanup** — all test users are deleted after each test
 - **Plugin system** — extend user creation with additional resources (orgs, API keys, etc.)
@@ -60,7 +60,7 @@ Use the `auth` fixture to create users and get authenticated browser sessions:
 
 ```ts
 // e2e/dashboard.spec.ts
-import { test, expect } from './fixtures'
+import { expect, test } from './fixtures'
 
 test('user can see the dashboard', async ({ page, auth }) => {
   const user = await auth.createUser()
@@ -92,7 +92,7 @@ Better Auth plugin that registers test data endpoints. Import from `better-auth-
 | `DELETE` | `/api/auth/test-data/user` | Delete a test user by email. Runs plugin cleanup in reverse order. |
 | `GET` | `/api/auth/test-data/capabilities` | List installed test data plugins and detected Better Auth plugins. |
 
-All endpoints require the `X-Test-Secret` header and are marked `SERVER_ONLY` (not callable from the client SDK).
+All endpoints require the `X-Test-Secret` header and use `isAction: false` (not callable from the client SDK).
 
 #### `organizationTest(defaults?)`
 
@@ -114,8 +114,8 @@ Returns `{ id, name, slug }` or `null` if skipped.
 ```ts
 // auth.ts (server)
 import { betterAuth } from 'better-auth'
+import { organizationTest, testPlugin } from 'better-auth-playwright/server'
 import { organization } from 'better-auth/plugins'
-import { testPlugin, organizationTest } from 'better-auth-playwright/server'
 
 export const auth = betterAuth({
   plugins: [
@@ -137,7 +137,6 @@ Creates a Playwright `test` object with an `auth` fixture. Import from `better-a
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `secret` | `string` | *required* | Secret that matches the server plugin's secret. |
-| `cookieName` | `string` | `'better-auth.session_token'` | Session cookie name. |
 | `basePath` | `string` | `'/api/auth'` | Base path for Better Auth endpoints. |
 | `test` | `TestType` | `@playwright/test`'s `test` | Custom base test to extend (see [Custom Base Test](#custom-base-test)). |
 
@@ -161,7 +160,7 @@ interface TestUser {
   id: string
   email: string
   name: string
-  session: { id: string; token: string }
+  session: { id: string, token: string }
   plugins: Record<string, unknown>
 }
 ```
@@ -175,7 +174,7 @@ Delete a test user by email. Called automatically after each test for all users 
 Create custom test data plugins to extend user creation for other Better Auth plugins:
 
 ```ts
-import type { TestDataPlugin, CreateUserContext } from 'better-auth-playwright'
+import type { CreateUserContext, TestDataPlugin } from 'better-auth-playwright'
 
 interface MyPluginOptions {
   someOption?: string
@@ -232,6 +231,10 @@ export const test = createTestFixtures({
 
 export { expect } from 'better-auth-playwright'
 ```
+
+## Credit
+
+Built by the team behind [Gaffer](https://gaffer.sh) — test reporting and analytics for CI/CD.
 
 ## License
 

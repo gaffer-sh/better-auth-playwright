@@ -1,5 +1,5 @@
 import type { AuthContext, User } from 'better-auth'
-import type { TestDataPlugin, CreateUserContext } from '../types.js'
+import type { CreateUserContext, TestDataPlugin } from '../types.js'
 
 interface OrgTestOptions {
   /** Organization name. Defaults to "{user.name}'s Org" */
@@ -18,11 +18,25 @@ interface OrgTestResult {
   slug: string
 }
 
+async function importOrgPlugin(): Promise<typeof import('better-auth/plugins')> {
+  try {
+    return await import('better-auth/plugins')
+  }
+  catch (err) {
+    throw new Error(
+      'better-auth-playwright: organizationTest requires the organization plugin from better-auth. '
+      + 'Ensure better-auth is installed and includes the organization plugin exports.',
+      { cause: err },
+    )
+  }
+}
+
 export function organizationTest(
-  defaults?: Partial<OrgTestOptions>,
+  defaults?: OrgTestOptions,
 ): TestDataPlugin<'organization', OrgTestOptions, OrgTestResult | null> {
+  // eslint-disable-next-line ts/explicit-function-return-type
   async function getAdapter(ctx: AuthContext) {
-    const { getOrgAdapter } = await import('better-auth/plugins')
+    const { getOrgAdapter } = await importOrgPlugin()
     return getOrgAdapter(ctx)
   }
 
@@ -32,16 +46,17 @@ export function organizationTest(
     async onCreateUser(ctx: CreateUserContext, opts: OrgTestOptions) {
       const options = { ...defaults, ...opts }
 
-      if (options.skip) return null
+      if (options.skip)
+        return null
 
       const orgAdapter = await getAdapter(ctx.authContext)
 
       const name = options.name ?? `${ctx.user.name}'s Org`
-      const slug =
-        options.slug ??
-        ctx.user.email
-          .split('@')[0]
-          .replace(/[^a-z0-9-]/g, '-')
+      const slug
+        = options.slug
+          ?? ctx.user.email
+            .split('@')[0]
+            .replace(/[^a-z0-9-]/g, '-')
       const role = options.role ?? 'owner'
 
       const org = await orgAdapter.createOrganization({
@@ -67,7 +82,13 @@ export function organizationTest(
       const orgAdapter = await getAdapter(ctx)
       const orgs = await orgAdapter.listOrganizations(user.id)
       for (const org of orgs) {
-        await orgAdapter.deleteOrganization(org.id)
+        try {
+          await orgAdapter.deleteOrganization(org.id)
+        }
+        catch {
+          // Best-effort: continue deleting remaining orgs.
+          // The organization schema may cascade-delete when the user is removed.
+        }
       }
     },
   }

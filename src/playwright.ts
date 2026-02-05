@@ -1,4 +1,5 @@
-import { test as defaultBase, type Page, type TestType } from '@playwright/test'
+import type { Page, TestType } from '@playwright/test'
+import { test as defaultBase } from '@playwright/test'
 
 interface CreateUserOptions {
   email?: string
@@ -17,7 +18,7 @@ interface TestUser {
   id: string
   email: string
   name: string
-  session: { id: string; token: string }
+  session: { id: string, token: string }
   /** Plugin-specific data, keyed by plugin ID */
   plugins: Record<string, unknown>
 }
@@ -30,20 +31,20 @@ interface TestAuth {
    * `password` is specified). A session is created directly in the DB
    * and the session cookie is set on the browser context.
    */
-  createUser(options?: CreateUserOptions): Promise<TestUser>
+  createUser: (options?: CreateUserOptions) => Promise<TestUser>
 
   /**
    * Delete a test user by email. Called automatically in teardown
    * for all users created during the test.
    */
-  cleanup(email: string): Promise<void>
+  cleanup: (email: string) => Promise<void>
 }
 
 interface TestAuthFixtures {
   auth: TestAuth
 }
 
-export type { CreateUserOptions, TestUser, TestAuth, TestAuthFixtures }
+export type { CreateUserOptions, TestAuth, TestAuthFixtures, TestUser }
 
 /**
  * Create Playwright fixtures configured for your Better Auth app.
@@ -60,14 +61,10 @@ export type { CreateUserOptions, TestUser, TestAuth, TestAuthFixtures }
  * export { expect } from '@playwright/test'
  * ```
  */
+// eslint-disable-next-line ts/explicit-function-return-type
 export function createTestFixtures(config: {
   /** Secret that matches the server plugin's secret */
   secret: string
-  /**
-   * Session cookie name.
-   * Defaults to 'better-auth.session_token'.
-   */
-  cookieName?: string
   /**
    * Base path for Better Auth endpoints.
    * Defaults to '/api/auth'.
@@ -81,12 +78,11 @@ export function createTestFixtures(config: {
    */
   test?: TestType<any, any>
 }) {
-  const cookieName = config.cookieName ?? 'better-auth.session_token'
   const basePath = config.basePath ?? '/api/auth'
   const baseTest = config.test ?? defaultBase
 
   return baseTest.extend<TestAuthFixtures>({
-    auth: async ({ page, baseURL }: { page: Page; baseURL: string | undefined }, use: (r: TestAuth) => Promise<void>) => {
+    auth: async ({ page, baseURL }: { page: Page, baseURL: string | undefined }, use: (r: TestAuth) => Promise<void>) => {
       if (!baseURL) {
         throw new Error('baseURL must be configured in Playwright')
       }
@@ -97,9 +93,9 @@ export function createTestFixtures(config: {
 
       const auth: TestAuth = {
         async createUser(options = {}) {
-          const email =
-            options.email ??
-            `test-${crypto.randomUUID().slice(0, 8)}@test.local`
+          const email
+            = options.email
+              ?? `test-${crypto.randomUUID().slice(0, 8)}@test.local`
 
           const res = await fetch(`${origin}${basePath}/test-data/user`, {
             method: 'POST',
@@ -123,8 +119,8 @@ export function createTestFixtures(config: {
           }
 
           const data = (await res.json()) as {
-            user: { id: string; email: string; name: string }
-            session: { id: string; token: string }
+            user: { id: string, email: string, name: string }
+            session: { id: string, token: string }
             plugins: Record<string, unknown>
           }
           created.push(email)
@@ -160,14 +156,37 @@ export function createTestFixtures(config: {
         },
 
         async cleanup(email: string) {
-          await fetch(`${origin}${basePath}/test-data/user`, {
-            method: 'DELETE',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Test-Secret': config.secret,
-            },
-            body: JSON.stringify({ email }),
-          }).catch(() => {})
+          try {
+            const res = await fetch(`${origin}${basePath}/test-data/user`, {
+              method: 'DELETE',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Test-Secret': config.secret,
+              },
+              body: JSON.stringify({ email }),
+            })
+            if (!res.ok) {
+              console.warn(
+                `[better-auth-playwright] cleanup failed for ${email}: `
+                + `${res.status} ${res.statusText}`,
+              )
+            }
+            else {
+              const body = await res.json() as { success: boolean, warnings?: string[] }
+              if (body.warnings?.length) {
+                console.warn(
+                  `[better-auth-playwright] cleanup warnings for ${email}:`,
+                  body.warnings.join('; '),
+                )
+              }
+            }
+          }
+          catch (err) {
+            console.warn(
+              `[better-auth-playwright] cleanup failed for ${email}:`,
+              err instanceof Error ? err.message : err,
+            )
+          }
         },
       }
 
