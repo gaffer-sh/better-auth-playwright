@@ -44,8 +44,8 @@ async function importApiKeyPlugin(): Promise<typeof import('better-auth/plugins'
   }
   catch (err) {
     throw new Error(
-      'better-auth-playwright: apiKeyTest requires the api-key plugin from better-auth. '
-      + 'Ensure better-auth is installed and includes the api-key plugin exports.',
+      'better-auth-playwright: apiKeyTest requires "better-auth" to be installed. '
+      + 'Could not import defaultKeyHasher/API_KEY_TABLE_NAME from "better-auth/plugins".',
       { cause: err },
     )
   }
@@ -119,9 +119,9 @@ export function apiKeyTest(
         }
       }
       catch {
-        // Best-effort cleanup: the apikey schema declares onDelete: "cascade"
-        // on userId, so rows may already be gone after user deletion.
-        // Adapter errors here (e.g., "row not found") are expected in that case.
+        // Best-effort cleanup: if this fails, the apikey schema's
+        // onDelete: "cascade" on userId will remove these rows when
+        // the user is deleted in the next step.
       }
     },
   }

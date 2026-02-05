@@ -82,11 +82,17 @@ export function testPlugin(options: TestPluginOptions = {}): BetterAuthPlugin {
           const pluginResults: Record<string, unknown> = {}
           for (const plugin of testPlugins) {
             const pluginOpts = ctx.body.pluginData?.[plugin.id] ?? {}
+            if (!ctx.request) {
+              return ctx.json(
+                { error: 'Internal error: request object missing from context' },
+                { status: 500 },
+              )
+            }
             const pluginCtx: CreateUserContext = {
               authContext: ctx.context,
               user,
               session,
-              request: ctx.request!,
+              request: ctx.request,
             }
             try {
               pluginResults[plugin.id] = await plugin.onCreateUser(
@@ -96,10 +102,16 @@ export function testPlugin(options: TestPluginOptions = {}): BetterAuthPlugin {
             }
             catch (err) {
               // Clean up the already-created user to avoid orphan records
-              await adapter.deleteUser(user.id).catch(() => {})
               const message = err instanceof Error ? err.message : String(err)
+              let rollbackNote = ''
+              try {
+                await adapter.deleteUser(user.id)
+              }
+              catch {
+                rollbackNote = ' (warning: user rollback also failed — orphan record may exist)'
+              }
               return ctx.json(
-                { error: `Plugin "${plugin.id}" failed: ${message}` },
+                { error: `Plugin "${plugin.id}" failed: ${message}${rollbackNote}` },
                 { status: 500 },
               )
             }

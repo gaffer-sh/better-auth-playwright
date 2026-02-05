@@ -18,12 +18,25 @@ interface OrgTestResult {
   slug: string
 }
 
+async function importOrgPlugin(): Promise<typeof import('better-auth/plugins')> {
+  try {
+    return await import('better-auth/plugins')
+  }
+  catch (err) {
+    throw new Error(
+      'better-auth-playwright: organizationTest requires the organization plugin from better-auth. '
+      + 'Ensure better-auth is installed and includes the organization plugin exports.',
+      { cause: err },
+    )
+  }
+}
+
 export function organizationTest(
   defaults?: OrgTestOptions,
 ): TestDataPlugin<'organization', OrgTestOptions, OrgTestResult | null> {
   // eslint-disable-next-line ts/explicit-function-return-type
   async function getAdapter(ctx: AuthContext) {
-    const { getOrgAdapter } = await import('better-auth/plugins')
+    const { getOrgAdapter } = await importOrgPlugin()
     return getOrgAdapter(ctx)
   }
 
@@ -69,7 +82,13 @@ export function organizationTest(
       const orgAdapter = await getAdapter(ctx)
       const orgs = await orgAdapter.listOrganizations(user.id)
       for (const org of orgs) {
-        await orgAdapter.deleteOrganization(org.id)
+        try {
+          await orgAdapter.deleteOrganization(org.id)
+        }
+        catch {
+          // Best-effort: continue deleting remaining orgs.
+          // The organization schema may cascade-delete when the user is removed.
+        }
       }
     },
   }

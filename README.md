@@ -4,7 +4,7 @@ Test data management for [Better Auth](https://www.better-auth.com/) and [Playwr
 
 ## Features
 
-- **Direct DB user creation** — bypasses sign-up flow and password hashing for fast tests
+- **Direct DB user creation** — bypasses sign-up flow for fast tests (password hashing only when needed)
 - **Auto session cookies** — sets session cookies on the Playwright browser context automatically
 - **Automatic cleanup** — all test users are deleted after each test
 - **Plugin system** — extend user creation with additional resources (orgs, API keys, etc.)

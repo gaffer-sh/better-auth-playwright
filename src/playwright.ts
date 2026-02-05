@@ -171,6 +171,15 @@ export function createTestFixtures(config: {
                 + `${res.status} ${res.statusText}`,
               )
             }
+            else {
+              const body = await res.json() as { success: boolean, warnings?: string[] }
+              if (body.warnings?.length) {
+                console.warn(
+                  `[better-auth-playwright] cleanup warnings for ${email}:`,
+                  body.warnings.join('; '),
+                )
+              }
+            }
           }
           catch (err) {
             console.warn(
