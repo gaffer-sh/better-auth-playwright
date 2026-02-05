@@ -66,11 +66,6 @@ export function createTestFixtures(config: {
   /** Secret that matches the server plugin's secret */
   secret: string
   /**
-   * Session cookie name.
-   * Defaults to 'better-auth.session_token'.
-   */
-  cookieName?: string
-  /**
    * Base path for Better Auth endpoints.
    * Defaults to '/api/auth'.
    */
@@ -83,7 +78,6 @@ export function createTestFixtures(config: {
    */
   test?: TestType<any, any>
 }) {
-  const _cookieName = config.cookieName ?? 'better-auth.session_token'
   const basePath = config.basePath ?? '/api/auth'
   const baseTest = config.test ?? defaultBase
 
@@ -162,14 +156,28 @@ export function createTestFixtures(config: {
         },
 
         async cleanup(email: string) {
-          await fetch(`${origin}${basePath}/test-data/user`, {
-            method: 'DELETE',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Test-Secret': config.secret,
-            },
-            body: JSON.stringify({ email }),
-          }).catch(() => {})
+          try {
+            const res = await fetch(`${origin}${basePath}/test-data/user`, {
+              method: 'DELETE',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Test-Secret': config.secret,
+              },
+              body: JSON.stringify({ email }),
+            })
+            if (!res.ok) {
+              console.warn(
+                `[better-auth-playwright] cleanup failed for ${email}: `
+                + `${res.status} ${res.statusText}`,
+              )
+            }
+          }
+          catch (err) {
+            console.warn(
+              `[better-auth-playwright] cleanup failed for ${email}:`,
+              err instanceof Error ? err.message : err,
+            )
+          }
         },
       }
 

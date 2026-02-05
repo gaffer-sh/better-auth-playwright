@@ -19,7 +19,7 @@ interface OrgTestResult {
 }
 
 export function organizationTest(
-  defaults?: Partial<OrgTestOptions>,
+  defaults?: OrgTestOptions,
 ): TestDataPlugin<'organization', OrgTestOptions, OrgTestResult | null> {
   // eslint-disable-next-line ts/explicit-function-return-type
   async function getAdapter(ctx: AuthContext) {

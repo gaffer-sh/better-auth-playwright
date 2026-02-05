@@ -92,7 +92,7 @@ Better Auth plugin that registers test data endpoints. Import from `better-auth-
 | `DELETE` | `/api/auth/test-data/user` | Delete a test user by email. Runs plugin cleanup in reverse order. |
 | `GET` | `/api/auth/test-data/capabilities` | List installed test data plugins and detected Better Auth plugins. |
 
-All endpoints require the `X-Test-Secret` header and are marked `SERVER_ONLY` (not callable from the client SDK).
+All endpoints require the `X-Test-Secret` header and use `isAction: false` (not callable from the client SDK).
 
 #### `organizationTest(defaults?)`
 
@@ -137,7 +137,6 @@ Creates a Playwright `test` object with an `auth` fixture. Import from `better-a
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `secret` | `string` | *required* | Secret that matches the server plugin's secret. |
-| `cookieName` | `string` | `'better-auth.session_token'` | Session cookie name. |
 | `basePath` | `string` | `'/api/auth'` | Base path for Better Auth endpoints. |
 | `test` | `TestType` | `@playwright/test`'s `test` | Custom base test to extend (see [Custom Base Test](#custom-base-test)). |
 

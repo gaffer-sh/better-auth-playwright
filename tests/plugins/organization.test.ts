@@ -30,4 +30,13 @@ describe('organizationTest', () => {
     )
     expect(result).toBeNull()
   })
+
+  it('per-call options override defaults', async () => {
+    const plugin = organizationTest({ skip: true })
+    // skip: false overrides skip: true — will attempt the real path and throw
+    // because there's no auth context, proving the merge happened
+    await expect(
+      plugin.onCreateUser({} as any, { skip: false }),
+    ).rejects.toThrow()
+  })
 })

@@ -1,15 +1,15 @@
 import type { AuthContext, User } from 'better-auth'
 import type { CreateUserContext, TestDataPlugin } from '../types.js'
 
-interface ApiKeyTestOptions {
+export interface ApiKeyTestOptions {
   /** Key display name. Defaults to "test-key" */
   name?: string
   /** Key prefix, e.g. "sk_test_" */
   prefix?: string
-  /** TTL in seconds. `null` = no expiry */
-  expiresIn?: number | null
-  /** Request quota. `null` = unlimited */
-  remaining?: number | null
+  /** TTL in seconds. Omit for no expiry. */
+  expiresIn?: number
+  /** Request quota. Omit for unlimited. */
+  remaining?: number
   /** Arbitrary metadata stored alongside the key */
   metadata?: Record<string, unknown>
   /** Permission scopes for the key */
@@ -18,11 +18,11 @@ interface ApiKeyTestOptions {
   skip?: boolean
 }
 
-interface ApiKeyTestResult {
+export interface ApiKeyTestResult {
   id: string
   /** The raw unhashed key — only available at creation time */
   key: string
-  /** First characters of the key (for display) */
+  /** The key prefix plus the first 5 characters of the random portion (for display/identification) */
   start: string
   prefix: string
   userId: string
@@ -30,16 +30,29 @@ interface ApiKeyTestResult {
   expiresAt: Date | null
 }
 
-function generateRawKey(length = 32): string {
-  const bytes = new Uint8Array(length)
+function generateRawKey(byteLength = 32): string {
+  const bytes = new Uint8Array(byteLength)
   crypto.getRandomValues(bytes)
-  // Base64url encode (no padding) for URL-safe key
+  // Base64url encode (no padding) for URL-safe key — 32 bytes yields ~43 chars
   const base64 = btoa(String.fromCharCode(...bytes))
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
+async function importApiKeyPlugin(): Promise<typeof import('better-auth/plugins')> {
+  try {
+    return await import('better-auth/plugins')
+  }
+  catch (err) {
+    throw new Error(
+      'better-auth-playwright: apiKeyTest requires the api-key plugin from better-auth. '
+      + 'Ensure better-auth is installed and includes the api-key plugin exports.',
+      { cause: err },
+    )
+  }
+}
+
 export function apiKeyTest(
-  defaults?: Partial<ApiKeyTestOptions>,
+  defaults?: ApiKeyTestOptions,
 ): TestDataPlugin<'api-key', ApiKeyTestOptions, ApiKeyTestResult | null> {
   return {
     id: 'api-key',
@@ -50,7 +63,7 @@ export function apiKeyTest(
       if (options.skip)
         return null
 
-      const { defaultKeyHasher, API_KEY_TABLE_NAME } = await import('better-auth/plugins')
+      const { defaultKeyHasher, API_KEY_TABLE_NAME } = await importApiKeyPlugin()
 
       const prefix = options.prefix ?? ''
       const rawKey = `${prefix}${generateRawKey()}`
@@ -62,20 +75,7 @@ export function apiKeyTest(
         ? new Date(Date.now() + options.expiresIn * 1000)
         : null
 
-      const record = await ctx.authContext.adapter.create<{
-        id: string
-        key: string
-        start: string
-        prefix: string
-        userId: string
-        name: string
-        expiresAt: Date | null
-        remaining: number | null
-        metadata: string | null
-        permissions: string | null
-        enabled: boolean
-        createdAt: Date
-      }>({
+      const record = await ctx.authContext.adapter.create<{ id: string }>({
         model: API_KEY_TABLE_NAME,
         data: {
           name,
@@ -104,8 +104,9 @@ export function apiKeyTest(
     },
 
     async onDeleteUser(ctx: AuthContext, user: User) {
+      const { API_KEY_TABLE_NAME } = await importApiKeyPlugin()
+
       try {
-        const { API_KEY_TABLE_NAME } = await import('better-auth/plugins')
         const keys = await ctx.adapter.findMany<{ id: string }>({
           model: API_KEY_TABLE_NAME,
           where: [{ field: 'userId', value: user.id }],
@@ -118,8 +119,9 @@ export function apiKeyTest(
         }
       }
       catch {
-        // Best-effort: apikey table has onDelete: "cascade" on userId,
-        // so keys are typically auto-deleted by the DB.
+        // Best-effort cleanup: the apikey schema declares onDelete: "cascade"
+        // on userId, so rows may already be gone after user deletion.
+        // Adapter errors here (e.g., "row not found") are expected in that case.
       }
     },
   }

@@ -4,6 +4,7 @@ import { setSessionCookie } from 'better-auth/cookies'
 import { createAuthEndpoint } from 'better-auth/plugins'
 import { z } from 'zod'
 
+export type { ApiKeyTestOptions, ApiKeyTestResult } from './plugins/api-key.js'
 export { apiKeyTest, organizationTest } from './plugins/index.js'
 export type { CreateUserContext, TestDataPlugin } from './types.js'
 
@@ -12,7 +13,7 @@ interface TestPluginOptions {
    * Test data plugins that extend user creation with
    * plugin-specific resources (orgs, API keys, etc.)
    */
-  plugins?: TestDataPlugin<any, any, any>[]
+  plugins?: TestDataPlugin[]
 
   /**
    * Secret required in X-Test-Secret header.
@@ -55,7 +56,7 @@ export function testPlugin(options: TestPluginOptions = {}): BetterAuthPlugin {
           const email = ctx.body.email
           const name = ctx.body.name ?? email.split('@')[0]
 
-          // 1. Create user (no hashing, no sign-up flow)
+          // 1. Create user directly via internalAdapter (bypasses sign-up flow)
           const user = await adapter.createUser({
             email,
             name,
@@ -76,7 +77,8 @@ export function testPlugin(options: TestPluginOptions = {}): BetterAuthPlugin {
           // 3. Create session directly (bypasses auth flow)
           const session = await adapter.createSession(user.id)
 
-          // 4. Run test data plugins (may update session, e.g. activeOrganizationId)
+          // 4. Run test data plugins sequentially in registration order
+          //    (may update session, e.g. activeOrganizationId)
           const pluginResults: Record<string, unknown> = {}
           for (const plugin of testPlugins) {
             const pluginOpts = ctx.body.pluginData?.[plugin.id] ?? {}
@@ -86,10 +88,21 @@ export function testPlugin(options: TestPluginOptions = {}): BetterAuthPlugin {
               session,
               request: ctx.request!,
             }
-            pluginResults[plugin.id] = await plugin.onCreateUser(
-              pluginCtx,
-              pluginOpts,
-            )
+            try {
+              pluginResults[plugin.id] = await plugin.onCreateUser(
+                pluginCtx,
+                pluginOpts,
+              )
+            }
+            catch (err) {
+              // Clean up the already-created user to avoid orphan records
+              await adapter.deleteUser(user.id).catch(() => {})
+              const message = err instanceof Error ? err.message : String(err)
+              return ctx.json(
+                { error: `Plugin "${plugin.id}" failed: ${message}` },
+                { status: 500 },
+              )
+            }
           }
 
           // 5. Re-fetch session after plugins (plugins may have updated it,
@@ -97,11 +110,17 @@ export function testPlugin(options: TestPluginOptions = {}): BetterAuthPlugin {
           //    This ensures the cookie contains the final session state,
           //    which matters when cookie caching is enabled.
           const finalSession = await adapter.findSession(session.token)
+          if (!finalSession) {
+            return ctx.json(
+              { error: 'Session lookup failed after plugin execution' },
+              { status: 500 },
+            )
+          }
 
           // 6. Set signed session cookie AFTER plugins so cached cookie
           //    includes all plugin-added fields (e.g. activeOrganizationId)
           await setSessionCookie(ctx, {
-            session: finalSession?.session ?? session,
+            session: finalSession.session,
             user,
           })
 
@@ -137,14 +156,27 @@ export function testPlugin(options: TestPluginOptions = {}): BetterAuthPlugin {
             return ctx.json({ error: 'User not found' }, { status: 404 })
           }
 
-          // Run plugin cleanup in reverse order
+          // Run plugin cleanup in reverse order — wrap individually so one
+          // failure doesn't block user deletion or other plugin cleanup
+          const cleanupErrors: string[] = []
           for (const plugin of [...testPlugins].reverse()) {
             if (plugin.onDeleteUser) {
-              await plugin.onDeleteUser(ctx.context, found.user)
+              try {
+                await plugin.onDeleteUser(ctx.context, found.user)
+              }
+              catch (err) {
+                const message = err instanceof Error ? err.message : String(err)
+                cleanupErrors.push(`Plugin "${plugin.id}": ${message}`)
+              }
             }
           }
 
+          // Always delete the user, even if plugin cleanup had errors
           await adapter.deleteUser(found.user.id)
+
+          if (cleanupErrors.length > 0) {
+            return ctx.json({ success: true, warnings: cleanupErrors })
+          }
           return ctx.json({ success: true })
         },
       ),
@@ -158,6 +190,10 @@ export function testPlugin(options: TestPluginOptions = {}): BetterAuthPlugin {
         async (ctx) => {
           if (!secret)
             return ctx.json(null, { status: 404 })
+          const headerSecret = ctx.headers?.get('x-test-secret')
+          if (headerSecret !== secret) {
+            return ctx.json({ error: 'Unauthorized' }, { status: 401 })
+          }
 
           const installedBetterAuthPlugins = (
             ctx.context.options.plugins ?? []
@@ -170,5 +206,5 @@ export function testPlugin(options: TestPluginOptions = {}): BetterAuthPlugin {
         },
       ),
     },
-  } satisfies BetterAuthPlugin
+  }
 }
