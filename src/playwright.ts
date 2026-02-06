@@ -157,8 +157,8 @@ export function createTestFixtures(config: {
 
         async cleanup(email: string) {
           try {
-            const res = await fetch(`${origin}${basePath}/test-data/user`, {
-              method: 'DELETE',
+            const res = await fetch(`${origin}${basePath}/test-data/delete-user`, {
+              method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 'X-Test-Secret': config.secret,

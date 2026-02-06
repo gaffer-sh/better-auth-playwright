@@ -89,7 +89,7 @@ Better Auth plugin that registers test data endpoints. Import from `better-auth-
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/api/auth/test-data/user` | Create a test user + session. Runs plugin hooks. |
-| `DELETE` | `/api/auth/test-data/user` | Delete a test user by email. Runs plugin cleanup in reverse order. |
+| `POST` | `/api/auth/test-data/delete-user` | Delete a test user by email. Runs plugin cleanup in reverse order. |
 | `GET` | `/api/auth/test-data/capabilities` | List installed test data plugins and detected Better Auth plugins. |
 
 All endpoints require the `X-Test-Secret` header and use `isAction: false` (not callable from the client SDK).
