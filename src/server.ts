@@ -146,9 +146,9 @@ export function testPlugin(options: TestPluginOptions = {}): BetterAuthPlugin {
       ),
 
       deleteTestUser: createAuthEndpoint(
-        '/test-data/user',
+        '/test-data/delete-user',
         {
-          method: 'DELETE',
+          method: 'POST',
           body: z.object({
             email: z.string().email(),
           }),
