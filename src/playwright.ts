@@ -120,7 +120,7 @@ export function createTestFixtures(config: {
       const context = page.context()
 
       // Apply Set-Cookie headers from a fetch response onto the browser context
-      async function applyCookiesFromResponse(res: Response) {
+      async function applyCookiesFromResponse(res: Response): Promise<void> {
         const domain = new URL(verifiedBaseURL).hostname
         const setCookieHeaders = res.headers.getSetCookie()
         const cookies = setCookieHeaders.map((header) => {
