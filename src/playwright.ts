@@ -14,6 +14,19 @@ interface CreateUserOptions {
   pluginData?: Record<string, unknown>
 }
 
+type OAuthProvider = 'google' | 'github' | 'apple' | 'microsoft' | 'facebook' | 'twitter' | 'discord' | 'gitlab'
+
+interface CreateOAuthUserOptions {
+  /** OAuth provider to simulate (e.g. 'google', 'github') */
+  provider: OAuthProvider
+  email?: string
+  name?: string
+  /** Provider account ID. Auto-generated if omitted. */
+  providerAccountId?: string
+  /** Plugin-specific options, keyed by plugin ID */
+  pluginData?: Record<string, unknown>
+}
+
 interface TestUser {
   id: string
   email: string
@@ -21,6 +34,10 @@ interface TestUser {
   session: { id: string, token: string }
   /** Plugin-specific data, keyed by plugin ID */
   plugins: Record<string, unknown>
+}
+
+interface TestOAuthUser extends TestUser {
+  account: { provider: OAuthProvider, providerAccountId: string }
 }
 
 interface TestAuth {
@@ -34,6 +51,16 @@ interface TestAuth {
   createUser: (options?: CreateUserOptions) => Promise<TestUser>
 
   /**
+   * Create a test OAuth user (Google, GitHub, etc) without going through the
+   * real provider's auth flow. Uses internalAdapter.createOAuthUser, which
+   * exercises the same database hooks as a real OAuth signup — including
+   * databaseHooks.user.create.after AND databaseHooks.account.create.after
+   * with the correct providerId. Use for testing OAuth-specific behavior in
+   * your app's auth hooks.
+   */
+  createOAuthUser: (options: CreateOAuthUserOptions) => Promise<TestOAuthUser>
+
+  /**
    * Delete a test user by email. Called automatically in teardown
    * for all users created during the test.
    */
@@ -44,7 +71,7 @@ interface TestAuthFixtures {
   auth: TestAuth
 }
 
-export type { CreateUserOptions, TestAuth, TestAuthFixtures, TestUser }
+export type { CreateOAuthUserOptions, CreateUserOptions, OAuthProvider, TestAuth, TestAuthFixtures, TestOAuthUser, TestUser }
 
 /**
  * Create Playwright fixtures configured for your Better Auth app.
@@ -87,9 +114,32 @@ export function createTestFixtures(config: {
         throw new Error('baseURL must be configured in Playwright')
       }
 
-      const origin = baseURL.replace(/\/+$/, '')
+      const verifiedBaseURL = baseURL
+      const origin = verifiedBaseURL.replace(/\/+$/, '')
       const created: string[] = []
       const context = page.context()
+
+      // Apply Set-Cookie headers from a fetch response onto the browser context
+      async function applyCookiesFromResponse(res: Response): Promise<void> {
+        const domain = new URL(verifiedBaseURL).hostname
+        const setCookieHeaders = res.headers.getSetCookie()
+        const cookies = setCookieHeaders.map((header) => {
+          const [nameValue, ...attrs] = header.split(';')
+          const [name, ...valueParts] = nameValue!.split('=')
+          const value = valueParts.join('=')
+          return {
+            name: name!.trim(),
+            value,
+            domain,
+            path: '/',
+            httpOnly: attrs.some(a => a.trim().toLowerCase() === 'httponly'),
+            secure: attrs.some(a => a.trim().toLowerCase() === 'secure'),
+          }
+        }).filter(c => c.name && c.value)
+        if (cookies.length > 0) {
+          await context.addCookies(cookies)
+        }
+      }
 
       const auth: TestAuth = {
         async createUser(options = {}) {
@@ -124,33 +174,59 @@ export function createTestFixtures(config: {
             plugins: Record<string, unknown>
           }
           created.push(email)
-
-          // Extract Set-Cookie headers from the response and set them on the browser context
-          const domain = new URL(baseURL).hostname
-          const setCookieHeaders = res.headers.getSetCookie()
-          const cookies = setCookieHeaders.map((header) => {
-            const [nameValue, ...attrs] = header.split(';')
-            const [name, ...valueParts] = nameValue!.split('=')
-            const value = valueParts.join('=')
-            return {
-              name: name!.trim(),
-              value,
-              domain,
-              path: '/',
-              // Preserve httpOnly/secure from original cookie attributes
-              httpOnly: attrs.some(a => a.trim().toLowerCase() === 'httponly'),
-              secure: attrs.some(a => a.trim().toLowerCase() === 'secure'),
-            }
-          }).filter(c => c.name && c.value)
-          if (cookies.length > 0) {
-            await context.addCookies(cookies)
-          }
+          await applyCookiesFromResponse(res)
 
           return {
             id: data.user.id,
             email: data.user.email,
             name: data.user.name,
             session: data.session,
+            plugins: data.plugins,
+          }
+        },
+
+        async createOAuthUser(options) {
+          const email
+            = options.email
+              ?? `test-oauth-${crypto.randomUUID().slice(0, 8)}@test.local`
+
+          const res = await fetch(`${origin}${basePath}/test-data/oauth-user`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Test-Secret': config.secret,
+            },
+            body: JSON.stringify({
+              email,
+              name: options.name,
+              provider: options.provider,
+              providerAccountId: options.providerAccountId,
+              pluginData: options.pluginData,
+            }),
+          })
+
+          if (!res.ok) {
+            const error = await res.text()
+            throw new Error(
+              `better-auth-playwright: createOAuthUser failed (${res.status}): ${error}`,
+            )
+          }
+
+          const data = (await res.json()) as {
+            user: { id: string, email: string, name: string }
+            session: { id: string, token: string }
+            account: { provider: OAuthProvider, providerAccountId: string }
+            plugins: Record<string, unknown>
+          }
+          created.push(email)
+          await applyCookiesFromResponse(res)
+
+          return {
+            id: data.user.id,
+            email: data.user.email,
+            name: data.user.name,
+            session: data.session,
+            account: data.account,
             plugins: data.plugins,
           }
         },
