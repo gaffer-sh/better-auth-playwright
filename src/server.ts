@@ -145,6 +145,107 @@ export function testPlugin(options: TestPluginOptions = {}): BetterAuthPlugin {
         },
       ),
 
+      createTestOAuthUser: createAuthEndpoint(
+        '/test-data/oauth-user',
+        {
+          method: 'POST',
+          body: z.object({
+            email: z.string().email(),
+            name: z.string().optional(),
+            provider: z.enum(['google', 'github', 'apple', 'microsoft', 'facebook', 'twitter', 'discord', 'gitlab']),
+            providerAccountId: z.string().optional(),
+            pluginData: z.record(z.string(), z.any()).optional(),
+          }),
+          metadata: { isAction: false },
+        },
+        async (ctx) => {
+          if (!secret)
+            return ctx.json(null, { status: 404 })
+          const headerSecret = ctx.headers?.get('x-test-secret')
+          if (headerSecret !== secret) {
+            return ctx.json({ error: 'Unauthorized' }, { status: 401 })
+          }
+
+          const adapter = ctx.context.internalAdapter
+          const email = ctx.body.email
+          const name = ctx.body.name ?? email.split('@')[0]
+          const provider = ctx.body.provider
+          const providerAccountId = ctx.body.providerAccountId ?? `test-${provider}-${Date.now()}`
+
+          // 1. Create user + OAuth account in one transaction via the same
+          //    code path real OAuth signups use. Fires both
+          //    databaseHooks.user.create.after AND
+          //    databaseHooks.account.create.after with the correct providerId.
+          const { user } = await adapter.createOAuthUser(
+            { email, name, emailVerified: true },
+            { providerId: provider, accountId: providerAccountId },
+          )
+
+          // 2. Create session directly (bypasses auth flow)
+          const session = await adapter.createSession(user.id)
+
+          // 3. Run test data plugins sequentially in registration order
+          const pluginResults: Record<string, unknown> = {}
+          for (const plugin of testPlugins) {
+            const pluginOpts = ctx.body.pluginData?.[plugin.id] ?? {}
+            if (!ctx.request) {
+              return ctx.json(
+                { error: 'Internal error: request object missing from context' },
+                { status: 500 },
+              )
+            }
+            const pluginCtx: CreateUserContext = {
+              authContext: ctx.context,
+              user,
+              session,
+              request: ctx.request,
+            }
+            try {
+              pluginResults[plugin.id] = await plugin.onCreateUser(
+                pluginCtx,
+                pluginOpts,
+              )
+            }
+            catch (err) {
+              const message = err instanceof Error ? err.message : String(err)
+              let rollbackNote = ''
+              try {
+                await adapter.deleteUser(user.id)
+              }
+              catch {
+                rollbackNote = ' (warning: user rollback also failed — orphan record may exist)'
+              }
+              return ctx.json(
+                { error: `Plugin "${plugin.id}" failed: ${message}${rollbackNote}` },
+                { status: 500 },
+              )
+            }
+          }
+
+          // 4. Re-fetch session after plugins (plugins may have updated it)
+          const finalSession = await adapter.findSession(session.token)
+          if (!finalSession) {
+            return ctx.json(
+              { error: 'Session lookup failed after plugin execution' },
+              { status: 500 },
+            )
+          }
+
+          // 5. Set signed session cookie
+          await setSessionCookie(ctx, {
+            session: finalSession.session,
+            user,
+          })
+
+          return ctx.json({
+            user: { id: user.id, email: user.email, name: user.name },
+            session: { id: session.id, token: session.token },
+            account: { provider, providerAccountId },
+            plugins: pluginResults,
+          })
+        },
+      ),
+
       deleteTestUser: createAuthEndpoint(
         '/test-data/delete-user',
         {
